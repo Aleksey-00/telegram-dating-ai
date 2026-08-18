@@ -132,3 +132,78 @@ async def test_conversation_service_restores_and_accumulates_risk():
 
     finally:
         await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_conversation_service_restores_positive_state():
+    settings = get_settings()
+
+    engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+    )
+
+    SessionLocal = async_sessionmaker(
+        engine,
+        expire_on_commit=False,
+    )
+
+    telegram_user_id = 987654326
+
+    try:
+        # Первый экземпляр сервиса формирует позитивное состояние.
+        async with SessionLocal() as session:
+            service = ConversationService(session)
+
+            result, conversation_id = await service.process_message(
+                telegram_user_id=telegram_user_id,
+                text="Ты мне очень нравишься",
+                sender=MessageSender.HER,
+            )
+
+            await session.commit()
+
+            assert result.state.interest_score > 0.0
+            assert result.state.meeting_readiness > 0.0
+
+            saved_interest = result.state.interest_score
+            saved_meeting_readiness = result.state.meeting_readiness
+
+        # Имитируем перезапуск приложения.
+        async with SessionLocal() as session:
+            service = ConversationService(session)
+
+            result, restored_conversation_id = await service.process_message(
+                telegram_user_id=telegram_user_id,
+                text="Мне очень комфортно с тобой",
+                sender=MessageSender.HER,
+            )
+
+            await session.commit()
+
+            assert restored_conversation_id == conversation_id
+
+            # Состояние первого сообщения восстановлено.
+            assert result.state.interest_score >= saved_interest
+
+            # Новое сообщение добавило comfort.
+            assert result.state.comfort_score > 0.0
+
+            # Meeting readiness продолжает рассчитываться
+            # на основе восстановленного состояния.
+            assert (
+                result.state.meeting_readiness
+                > saved_meeting_readiness
+            )
+
+        async with SessionLocal() as session:
+            conversation = await session.get(
+                Conversation,
+                conversation_id,
+            )
+
+            if conversation is not None:
+                await session.delete(conversation)
+                await session.commit()
+
+    finally:
+        await engine.dispose()
