@@ -94,6 +94,7 @@ class ConversationStateUpdater:
 
         if has_meeting_signal:
             score += cls.MEETING_SIGNAL_INCREMENT
+            score = max(score, 0.75)
 
         return min(1.0, score)
 

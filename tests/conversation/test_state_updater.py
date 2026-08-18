@@ -1,6 +1,7 @@
 
 from app.conversation.analyzer import MessageAnalyzer
 from app.conversation.state import ConversationState
+from app.conversation.enums import ConversationStage
 from app.conversation.state_updater import ConversationStateUpdater
 
 
@@ -57,3 +58,43 @@ def test_meeting_signal_updates_meeting_readiness():
     state = updater.update(state, analysis)
 
     assert state.meeting_readiness > 0.0
+
+
+def test_positive_chat_without_meeting_signal_does_not_trigger_meeting():
+    analyzer = MessageAnalyzer()
+    updater = ConversationStateUpdater()
+    state = ConversationState()
+
+    messages = [
+        "Мне интересно с тобой",
+        "Мне очень комфортно с тобой",
+        "Ты очень привлекательный мужчина",
+        "Я тоже думаю, что ты классный",
+    ]
+
+    for text in messages:
+        analysis = analyzer.analyze(text)
+        state = updater.update(state, analysis)
+
+    assert state.meeting_readiness < 0.75
+    assert state.stage != ConversationStage.MEETING
+
+
+def test_explicit_meeting_signal_can_trigger_meeting():
+    analyzer = MessageAnalyzer()
+    updater = ConversationStateUpdater()
+    state = ConversationState()
+
+    messages = [
+        "Мне интересно с тобой",
+        "Мне очень комфортно с тобой",
+        "Ты очень привлекательный мужчина",
+        "Давай встретимся завтра",
+    ]
+
+    for text in messages:
+        analysis = analyzer.analyze(text)
+        state = updater.update(state, analysis)
+
+    assert state.meeting_readiness >= 0.75
+    assert state.stage == ConversationStage.MEETING
