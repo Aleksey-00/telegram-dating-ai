@@ -35,3 +35,7 @@ uvicorn==0.52.3
 uvloop==0.22.1
 watchfiles==1.2.0
 websockets==17.0.1
+Telethon==1.44.0
+pyaes==1.6.1
+pyasn1==0.6.4
+rsa==4.9.1
