@@ -14,6 +14,8 @@ class DecisionResult:
 class DecisionEngine:
     STOP_SCAM_THRESHOLD = 0.85
     STOP_PRESSURE_THRESHOLD = 0.90
+    STOP_FINANCIAL_MANIPULATION_THRESHOLD = 0.30
+    STOP_PRESSURE_COMBINATION_THRESHOLD = 0.30
     CAUTION_MONEY_THRESHOLD = 0.80
     CAUTION_MANIPULATION_THRESHOLD = 0.75
     MEETING_THRESHOLD = 0.75
@@ -38,6 +40,27 @@ class DecisionEngine:
         if risk.pressure_score >= self.STOP_PRESSURE_THRESHOLD:
             reasons.append(
                 "Обнаружен высокий уровень давления."
+            )
+            return DecisionResult(
+                decision=ConversationDecision.STOP,
+                reasons=reasons,
+            )
+
+        if (
+            risk.money_focus >= self.CAUTION_MONEY_THRESHOLD
+            and (
+                risk.manipulation_score
+                >= self.STOP_FINANCIAL_MANIPULATION_THRESHOLD
+            )
+            and (
+                risk.pressure_score
+                >= self.STOP_PRESSURE_COMBINATION_THRESHOLD
+            )
+            and risk.scam_probability > 0.0
+        ):
+            reasons.append(
+                "Обнаружена комбинация финансового запроса, "
+                "манипуляции и давления."
             )
             return DecisionResult(
                 decision=ConversationDecision.STOP,

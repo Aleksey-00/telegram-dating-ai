@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import get_settings
-from app.conversation.enums import MessageSender
+from app.conversation.enums import ConversationDecision, MessageSender
 from app.conversation.service import ConversationService
 from app.database.models import Conversation, ConversationAssessment, Message
 
@@ -22,7 +22,7 @@ async def test_conversation_service_restores_and_accumulates_risk():
         expire_on_commit=False,
     )
 
-    telegram_user_id = 987654324
+    telegram_user_id = 987654325
 
     try:
         # Первый экземпляр сервиса.
@@ -31,22 +31,23 @@ async def test_conversation_service_restores_and_accumulates_risk():
 
             result, conversation_id = await service.process_message(
                 telegram_user_id=telegram_user_id,
-                text="У меня сейчас проблемы с финансами",
+                text="Можешь одолжить мне денег?",
                 sender=MessageSender.HER,
             )
 
             await session.commit()
 
-            assert result.risk.money_focus == 0.15
+            assert result.decision.decision == ConversationDecision.CAUTION
+            assert result.risk.money_focus >= 0.80
 
-        # Новый session + новый ConversationService.
-        # Имитируем перезапуск приложения.
+        # Имитируем перезапуск приложения:
+        # новый session + новый ConversationService.
         async with SessionLocal() as session:
             service = ConversationService(session)
 
             result, restored_conversation_id = await service.process_message(
                 telegram_user_id=telegram_user_id,
-                text="У меня сейчас проблемы с финансами",
+                text="Если ты меня любишь, ты бы помог.",
                 sender=MessageSender.HER,
             )
 
@@ -54,9 +55,42 @@ async def test_conversation_service_restores_and_accumulates_risk():
 
             assert restored_conversation_id == conversation_id
 
-            # Первые 0.15 были восстановлены из БД.
-            # Второе сообщение добавило ещё 0.15.
-            assert result.risk.money_focus == 0.30
+            # money_focus из первого сообщения восстановлен.
+            assert result.risk.money_focus >= 0.80
+
+            # Второе сообщение добавило manipulation.
+            assert result.risk.manipulation_score >= 0.30
+
+            # Решение всё ещё должно учитывать накопленный риск.
+            assert result.decision.decision == ConversationDecision.CAUTION
+
+        # Ещё один перезапуск.
+        async with SessionLocal() as session:
+            service = ConversationService(session)
+
+            result, restored_conversation_id = await service.process_message(
+                telegram_user_id=telegram_user_id,
+                text=(
+                    "Докажи, что ты настоящий мужчина, "
+                    "переведи деньги сейчас."
+                ),
+                sender=MessageSender.HER,
+            )
+
+            await session.commit()
+
+            assert restored_conversation_id == conversation_id
+
+            # Накопленные признаки не должны исчезнуть.
+            assert result.risk.money_focus >= 0.80
+            assert result.risk.manipulation_score >= 0.30
+            assert result.risk.pressure_score >= 0.30
+
+            # Финальное сообщение содержит scam-признак.
+            assert result.risk.scam_probability > 0.0
+
+            # На текущих порогах это должно привести к STOP.
+            assert result.decision.decision == ConversationDecision.STOP
 
             conversation = await session.get(
                 Conversation,
@@ -64,6 +98,7 @@ async def test_conversation_service_restores_and_accumulates_risk():
             )
 
             assert conversation is not None
+            assert conversation.decision == ConversationDecision.STOP.value
 
             assessments = (
                 await session.execute(
@@ -76,9 +111,9 @@ async def test_conversation_service_restores_and_accumulates_risk():
                 )
             ).scalars().all()
 
-            assert len(assessments) == 2
-            assert assessments[0].money_focus == 0.15
-            assert assessments[1].money_focus == 0.30
+            assert len(assessments) == 3
+
+            assert assessments[-1].decision == ConversationDecision.STOP.value
 
             messages = (
                 await session.execute(
@@ -86,10 +121,11 @@ async def test_conversation_service_restores_and_accumulates_risk():
                     .where(
                         Message.conversation_id == conversation_id
                     )
+                    .order_by(Message.id)
                 )
             ).scalars().all()
 
-            assert len(messages) == 2
+            assert len(messages) == 3
 
             await session.delete(conversation)
             await session.commit()

@@ -7,54 +7,83 @@ class ConversationStateUpdater:
     """
     Обновляет состояние общения после анализа сообщения.
 
-    Пока используется простая эвристическая модель.
-    Позже сюда подключим LLM.
+    Positive signals увеличивают соответствующие показатели
+    состояния разговора.
     """
+
+    SIGNAL_WEIGHTS = {
+        "interest": "interest_score",
+        "mutuality": "mutuality_score",
+        "comfort": "comfort_score",
+        "flirt": "flirt_score",
+    }
+
+    NORMAL_MESSAGE_INCREMENT = 0.05
+    MEETING_SIGNAL_INCREMENT = 0.25
 
     def update(
         self,
         state: ConversationState,
         analysis: MessageAnalysis,
     ) -> ConversationState:
-        text = analysis
 
-        risk = text.risk
+        positive_names = {
+            signal.name
+            for signal in analysis.positive_signals
+        }
 
-        # Пока risk-анализ не содержит positive signals,
-        # поэтому используем отсутствие риска как слабый
-        # индикатор нормального общения.
+        # Слабый прирост для обычного позитивного общения.
         if (
-            risk.money_focus == 0.0
-            and risk.pressure_score == 0.0
-            and risk.manipulation_score == 0.0
-            and risk.scam_probability == 0.0
+            not analysis.risk.money_focus
+            and not analysis.risk.pressure_score
+            and not analysis.risk.manipulation_score
+            and not analysis.risk.scam_probability
+            and not positive_names
         ):
             state.interest_score = min(
                 1.0,
-                state.interest_score + 0.05,
+                state.interest_score + self.NORMAL_MESSAGE_INCREMENT,
             )
 
             state.mutuality_score = min(
                 1.0,
-                state.mutuality_score + 0.05,
+                state.mutuality_score + self.NORMAL_MESSAGE_INCREMENT,
             )
 
             state.comfort_score = min(
                 1.0,
-                state.comfort_score + 0.05,
+                state.comfort_score + self.NORMAL_MESSAGE_INCREMENT,
+            )
+
+        for signal in analysis.positive_signals:
+            field_name = self.SIGNAL_WEIGHTS.get(signal.name)
+
+            if field_name is None:
+                continue
+
+            current = getattr(state, field_name)
+
+            setattr(
+                state,
+                field_name,
+                min(1.0, current + signal.score),
             )
 
         state.meeting_readiness = self._calculate_meeting_readiness(
             state,
+            has_meeting_signal="meeting" in positive_names,
         )
 
         state.stage = self._calculate_stage(state)
 
         return state
 
-    @staticmethod
+    @classmethod
     def _calculate_meeting_readiness(
+        cls,
         state: ConversationState,
+        *,
+        has_meeting_signal: bool = False,
     ) -> float:
         score = (
             state.interest_score * 0.30
@@ -62,6 +91,9 @@ class ConversationStateUpdater:
             + state.comfort_score * 0.25
             + state.flirt_score * 0.15
         )
+
+        if has_meeting_signal:
+            score += cls.MEETING_SIGNAL_INCREMENT
 
         return min(1.0, score)
 

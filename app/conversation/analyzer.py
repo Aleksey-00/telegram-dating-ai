@@ -10,11 +10,18 @@ class RiskSignal:
     score: float
     reason: str
 
+@dataclass(slots=True)
+class PositiveSignal:
+    name: str
+    score: float
+    reason: str
+
 
 @dataclass(slots=True)
 class MessageAnalysis:
     risk: RiskAssessment
     signals: list[RiskSignal] = field(default_factory=list)
+    positive_signals: list[PositiveSignal] = field(default_factory=list)
 
 
 class MessageAnalyzer:
@@ -88,6 +95,47 @@ class MessageAnalyzer:
         r"\bты меня разочаровываешь",
         r"\bзначит тебе всё равно",
         r"\bзначит я тебе не нужна",
+    )
+
+    INTEREST_PATTERNS = (
+        r"\bты мне (?:очень |правда |действительно )?нравишься\b",
+        r"\bмне ты (?:очень |правда |действительно )?нравишься\b",
+        r"\bмне интересно с тобой\b",
+    )
+
+    MUTUALITY_PATTERNS = (
+        r"\bя тоже\b",
+        r"\bмне тоже\b",
+        r"\bтоже хочу\b",
+        r"\bтоже нравится\b",
+        r"\bя согласен\b",
+        r"\bя согласна\b",
+    )
+
+    COMFORT_PATTERNS = (
+        r"\bмне комфортно с тобой\b",
+        r"\bмне очень комфортно с тобой\b",
+        r"\bмне легко с тобой\b",
+        r"\bмне хорошо с тобой\b",
+        r"\bмне спокойно с тобой\b",
+    )
+
+    FLIRT_PATTERNS = (
+        r"\bты очень привлекательн",
+        r"\bты красив",
+        r"\bты симпатичн",
+        r"\bты сексуальн",
+        r"\bты такой классный\b",
+        r"\bты такой милый\b",
+    )
+
+    MEETING_PATTERNS = (
+        r"\bдавай встретимся\b",
+        r"\bхочу тебя увидеть\b",
+        r"\bхочу увидеться\b",
+        r"\bдавай увидимся\b",
+        r"\bкогда увидимся\b",
+        r"\bхочу встретиться\b",
     )
 
     def analyze(self, text: str) -> MessageAnalysis:
@@ -186,9 +234,57 @@ class MessageAnalyzer:
             pressure_score=pressure_score,
         )
 
+        positive_signals: list[PositiveSignal] = []
+
+        positive_definitions = (
+            (
+                "interest",
+                self.INTEREST_PATTERNS,
+                "Обнаружены признаки интереса к собеседнику.",
+            ),
+            (
+                "mutuality",
+                self.MUTUALITY_PATTERNS,
+                "Обнаружены признаки взаимности.",
+            ),
+            (
+                "comfort",
+                self.COMFORT_PATTERNS,
+                "Обнаружены признаки эмоционального комфорта.",
+            ),
+            (
+                "flirt",
+                self.FLIRT_PATTERNS,
+                "Обнаружены признаки флирта.",
+            ),
+            (
+                "meeting",
+                self.MEETING_PATTERNS,
+                "Обнаружена готовность к встрече.",
+            ),
+        )
+
+        for name, patterns, reason in positive_definitions:
+            score = self._score_matches(
+                normalized,
+                patterns,
+                per_match=0.50,
+                maximum=1.0,
+            )
+
+            if score > 0:
+                positive_signals.append(
+                    PositiveSignal(
+                        name=name,
+                        score=score,
+                        reason=reason,
+                    )
+                )
+
         return MessageAnalysis(
             risk=risk,
             signals=signals,
+            positive_signals=positive_signals,
         )
 
     @staticmethod
