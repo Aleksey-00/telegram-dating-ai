@@ -90,3 +90,75 @@ def test_signals_are_returned():
     assert "money_focus" in signal_names
     assert "manipulation" in signal_names
     assert "scam" in signal_names
+
+
+def test_interest_signal_is_detected():
+    analyzer = MessageAnalyzer()
+
+    result = analyzer.analyze(
+        "Ты мне очень нравишься"
+    )
+
+    signal_names = {signal.name for signal in result.positive_signals}
+
+    assert "interest" in signal_names
+
+
+def test_mutuality_signal_is_detected():
+    analyzer = MessageAnalyzer()
+
+    result = analyzer.analyze(
+        "Я тоже хочу тебя увидеть"
+    )
+
+    signal_names = {signal.name for signal in result.positive_signals}
+
+    assert "mutuality" in signal_names
+
+
+def test_comfort_signal_is_detected():
+    analyzer = MessageAnalyzer()
+
+    result = analyzer.analyze(
+        "Мне очень комфортно с тобой"
+    )
+
+    signal_names = {signal.name for signal in result.positive_signals}
+
+    assert "comfort" in signal_names
+
+
+def test_flirt_signal_is_detected():
+    analyzer = MessageAnalyzer()
+
+    result = analyzer.analyze(
+        "Ты очень привлекательный мужчина"
+    )
+
+    signal_names = {signal.name for signal in result.positive_signals}
+
+    assert "flirt" in signal_names
+
+
+def test_explicit_meeting_proposal_is_detected():
+    analyzer = MessageAnalyzer()
+
+    result = analyzer.analyze(
+        "Давай встретимся завтра"
+    )
+
+    signal_names = {signal.name for signal in result.positive_signals}
+
+    assert "meeting" in signal_names
+
+
+def test_future_meeting_context_is_not_meeting_signal():
+    analyzer = MessageAnalyzer()
+
+    result = analyzer.analyze(
+        "Когда будем ехать я буду писать"
+    )
+
+    signal_names = {signal.name for signal in result.positive_signals}
+
+    assert "meeting" not in signal_names

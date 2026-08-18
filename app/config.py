@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     llm_api_key: str | None = None
     llm_model: str | None = None
+    llm_base_url: str = "http://localhost:11434/v1"
+    llm_timeout_seconds: float = 60.0
 
     model_config = SettingsConfigDict(
         env_file=".env",
