@@ -1,3 +1,4 @@
+from app.ai.profile import get_user_profile
 from app.ai.prompts import SYSTEM_PROMPT
 from app.conversation.engine import ConversationResult
 from app.conversation.enums import MessageSender
@@ -65,7 +66,13 @@ Username: {conversation.username or "неизвестно"}
 Не упоминай эти показатели в сообщении собеседнице.
 """.strip()
 
-        return f"{SYSTEM_PROMPT.strip()}\n\n{context}"
+        profile = get_user_profile()
+
+        return (
+            f"{SYSTEM_PROMPT.strip()}\n\n"
+            f"{profile.to_prompt()}\n\n"
+            f"{context}"
+        )
 
     @staticmethod
     def _build_history(
