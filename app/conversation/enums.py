@@ -14,3 +14,8 @@ class ConversationDecision(StrEnum):
     CAUTION = "caution"
     SUGGEST_MEETING = "suggest_meeting"
     STOP = "stop"
+
+
+class MessageSender(StrEnum):
+    ME = "me"
+    HER = "her"
