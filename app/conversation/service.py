@@ -108,6 +108,14 @@ class ConversationService:
                 }
                 for signal in result.analysis.signals
             ],
+            positive_observations=[
+                {
+                    "name": signal.name,
+                    "score": signal.score,
+                    "reason": signal.reason,
+                }
+                for signal in result.analysis.positive_signals
+            ],
         )
 
         self.session.add(assessment)
